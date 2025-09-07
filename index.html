@@ -26,7 +26,7 @@
 <h3>Chat</h3>
 <div id="chat"></div>
 <input id="message" placeholder="Type message">
-<button id="sendMsg" disabled>Send</button>
+<button id="sendMsg">Send</button>
 
 <script>
 let pc;
@@ -40,26 +40,25 @@ function appendMsg(msg) {
 }
 
 // Initialize peer connection
-function createPeer() {
+function createPeer(isOfferer) {
     pc = new RTCPeerConnection();
 
-    // Handle incoming data channel
-    pc.ondatachannel = event => {
-        dc = event.channel;
+    if(isOfferer) {
+        dc = pc.createDataChannel("chat");
+        dc.onopen = () => appendMsg("DataChannel opened!");
         dc.onmessage = e => appendMsg("Peer: " + e.data);
-        dc.onopen = () => document.getElementById("sendMsg").disabled = false;
-        dc.onclose = () => document.getElementById("sendMsg").disabled = true;
-    };
+    } else {
+        pc.ondatachannel = event => {
+            dc = event.channel;
+            dc.onopen = () => appendMsg("DataChannel opened!");
+            dc.onmessage = e => appendMsg("Peer: " + e.data);
+        };
+    }
 }
 
 // Peer A: create offer
 document.getElementById("createOffer").onclick = async () => {
-    createPeer();
-
-    dc = pc.createDataChannel("chat");
-    dc.onmessage = e => appendMsg("Peer: " + e.data);
-    dc.onopen = () => document.getElementById("sendMsg").disabled = false;
-    dc.onclose = () => document.getElementById("sendMsg").disabled = true;
+    createPeer(true);
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -68,8 +67,7 @@ document.getElementById("createOffer").onclick = async () => {
 
 // Peer B: set remote offer
 document.getElementById("setOffer").onclick = async () => {
-    createPeer();
-
+    createPeer(false);
     const offer = JSON.parse(document.getElementById("sdp").value);
     await pc.setRemoteDescription(offer);
 
@@ -91,6 +89,8 @@ document.getElementById("sendMsg").onclick = () => {
         dc.send(msg);
         appendMsg("Me: " + msg);
         document.getElementById("message").value = "";
+    } else {
+        alert("DataChannel not open yet!");
     }
 };
 </script>
