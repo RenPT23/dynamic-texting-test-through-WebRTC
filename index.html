@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2P Test Chat</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+  input, textarea, button { width: 100%; margin: 5px 0; padding: 8px; box-sizing: border-box; }
+  #chat { border: 1px solid #ccc; padding: 10px; height: 250px; overflow-y: auto; margin-bottom: 10px; }
+  #message { width: calc(100% - 60px); display: inline-block; }
+  #sendMsg { width: 50px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<h2>P2P Test Chat</h2>
+
+<label>Your username:</label>
+<input id="username" placeholder="Type your name">
+
+<button id="createOffer">Create Offer (Peer A)</button>
+<button id="setOffer">Set Remote Offer (Peer B)</button>
+<textarea id="sdp" placeholder="Paste Offer/Answer here"></textarea>
+<button id="setAnswer">Set Remote Answer (Peer A)</button>
+
+<h3>Chat</h3>
+<div id="chat"></div>
+<input id="message" placeholder="Type message">
+<button id="sendMsg">Send</button>
+
+<script>
+let pc;
+let dc;
+
+// Initialize peer connection
+function createPeer() {
+    pc = new RTCPeerConnection();
+
+    // Receive data channel if peer creates one
+    pc.ondatachannel = event => {
+        dc = event.channel;
+        dc.onmessage = e => appendMsg("Peer: " + e.data);
+    };
+}
+
+// Append messages to chat box
+function appendMsg(msg) {
+    const chat = document.getElementById("chat");
+    chat.innerHTML += msg + "<br>";
+    chat.scrollTop = chat.scrollHeight;
+}
+
+// Peer A: create offer
+document.getElementById("createOffer").onclick = async () => {
+    createPeer();
+    dc = pc.createDataChannel("chat");
+    dc.onmessage = e => appendMsg("Peer: " + e.data);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    document.getElementById("sdp").value = JSON.stringify(offer);
+};
+
+// Peer B: set remote offer
+document.getElementById("setOffer").onclick = async () => {
+    createPeer();
+    const offer = JSON.parse(document.getElementById("sdp").value);
+    await pc.setRemoteDescription(offer);
+
+    dc = pc.createDataChannel("chat");
+    dc.onmessage = e => appendMsg("Peer: " + e.data);
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    document.getElementById("sdp").value = JSON.stringify(answer);
+};
+
+// Peer A: set remote answer
+document.getElementById("setAnswer").onclick = async () => {
+    const answer = JSON.parse(document.getElementById("sdp").value);
+    await pc.setRemoteDescription(answer);
+};
+
+// Send message
+document.getElementById("sendMsg").onclick = () => {
+    const msg = document.getElementById("message").value;
+    if(dc && dc.readyState === "open") {
+        dc.send(msg);
+        appendMsg("Me: " + msg);
+        document.getElementById("message").value = "";
+    } else {
+        alert("DataChannel not open yet!");
+    }
+};
+</script>
+
+</body>
+</html>
