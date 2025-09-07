@@ -20,8 +20,8 @@
 
 <button id="createOffer">Create Offer (Peer A)</button>
 <button id="setOffer">Set Remote Offer (Peer B)</button>
-<textarea id="sdp" placeholder="Paste Offer/Answer here"></textarea>
 <button id="setAnswer">Set Remote Answer (Peer A)</button>
+<textarea id="sdp" placeholder="Paste Offer/Answer here"></textarea>
 
 <h3>Chat</h3>
 <div id="chat"></div>
@@ -43,37 +43,44 @@ function appendMsg(msg) {
 function createPeer(isOfferer) {
     pc = new RTCPeerConnection();
 
-    if(isOfferer) {
+    // ICE gathering
+    pc.onicecandidate = event => {
+        if (event.candidate) return; // wait until gathering is complete
+        document.getElementById("sdp").value = JSON.stringify(pc.localDescription);
+    };
+
+    if (isOfferer) {
         dc = pc.createDataChannel("chat");
-        dc.onopen = () => appendMsg("DataChannel opened!");
-        dc.onmessage = e => appendMsg("Peer: " + e.data);
+        setupDataChannel(dc);
     } else {
         pc.ondatachannel = event => {
             dc = event.channel;
-            dc.onopen = () => appendMsg("DataChannel opened!");
-            dc.onmessage = e => appendMsg("Peer: " + e.data);
+            setupDataChannel(dc);
         };
     }
+}
+
+// Setup datachannel listeners
+function setupDataChannel(channel) {
+    dc = channel;
+    dc.onopen = () => appendMsg("<i>DataChannel opened!</i>");
+    dc.onmessage = e => appendMsg("Peer: " + e.data);
 }
 
 // Peer A: create offer
 document.getElementById("createOffer").onclick = async () => {
     createPeer(true);
-
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    document.getElementById("sdp").value = JSON.stringify(offer);
 };
 
-// Peer B: set remote offer
+// Peer B: set remote offer and create answer
 document.getElementById("setOffer").onclick = async () => {
     createPeer(false);
     const offer = JSON.parse(document.getElementById("sdp").value);
     await pc.setRemoteDescription(offer);
-
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    document.getElementById("sdp").value = JSON.stringify(answer);
 };
 
 // Peer A: set remote answer
@@ -85,7 +92,7 @@ document.getElementById("setAnswer").onclick = async () => {
 // Send message
 document.getElementById("sendMsg").onclick = () => {
     const msg = document.getElementById("message").value;
-    if(dc && dc.readyState === "open") {
+    if (dc && dc.readyState === "open") {
         dc.send(msg);
         appendMsg("Me: " + msg);
         document.getElementById("message").value = "";
