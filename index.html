@@ -26,22 +26,11 @@
 <h3>Chat</h3>
 <div id="chat"></div>
 <input id="message" placeholder="Type message">
-<button id="sendMsg">Send</button>
+<button id="sendMsg" disabled>Send</button>
 
 <script>
 let pc;
 let dc;
-
-// Initialize peer connection
-function createPeer() {
-    pc = new RTCPeerConnection();
-
-    // Receive data channel if peer creates one
-    pc.ondatachannel = event => {
-        dc = event.channel;
-        dc.onmessage = e => appendMsg("Peer: " + e.data);
-    };
-}
 
 // Append messages to chat box
 function appendMsg(msg) {
@@ -50,11 +39,27 @@ function appendMsg(msg) {
     chat.scrollTop = chat.scrollHeight;
 }
 
+// Initialize peer connection
+function createPeer() {
+    pc = new RTCPeerConnection();
+
+    // Handle incoming data channel
+    pc.ondatachannel = event => {
+        dc = event.channel;
+        dc.onmessage = e => appendMsg("Peer: " + e.data);
+        dc.onopen = () => document.getElementById("sendMsg").disabled = false;
+        dc.onclose = () => document.getElementById("sendMsg").disabled = true;
+    };
+}
+
 // Peer A: create offer
 document.getElementById("createOffer").onclick = async () => {
     createPeer();
+
     dc = pc.createDataChannel("chat");
     dc.onmessage = e => appendMsg("Peer: " + e.data);
+    dc.onopen = () => document.getElementById("sendMsg").disabled = false;
+    dc.onclose = () => document.getElementById("sendMsg").disabled = true;
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -64,11 +69,9 @@ document.getElementById("createOffer").onclick = async () => {
 // Peer B: set remote offer
 document.getElementById("setOffer").onclick = async () => {
     createPeer();
+
     const offer = JSON.parse(document.getElementById("sdp").value);
     await pc.setRemoteDescription(offer);
-
-    dc = pc.createDataChannel("chat");
-    dc.onmessage = e => appendMsg("Peer: " + e.data);
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -88,8 +91,6 @@ document.getElementById("sendMsg").onclick = () => {
         dc.send(msg);
         appendMsg("Me: " + msg);
         document.getElementById("message").value = "";
-    } else {
-        alert("DataChannel not open yet!");
     }
 };
 </script>
